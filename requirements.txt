@@ -1,2 +1,1 @@
- a2a-sdk
- uvicorn
+google-adk
