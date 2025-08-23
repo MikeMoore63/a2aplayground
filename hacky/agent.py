@@ -93,15 +93,41 @@ def hacky_agent() -> Agent:
     )
 
 
+def get_project_id():
+    return os.getenv("GOOGLE_CLOUD_PROJECT", "methodical-bee-162815")
+
+
+def get_region():
+    return os.getenv("GOOGLE_CLOUD_REGION", "us-central1")
+
+
+def get_kms_project():
+    return os.getenv("KMS_PROJECT", get_project_id())
+
+
 def init_vertex():
     gcs_bucket = os.getenv("GCS_BUCKET", "gs://bobby-test")
-    project_id = os.getenv("GOOGLE_CLOUD_PROJECT","methodical-bee-162815")
-    region = os.getenv("GOOGLE_CLOUD_REGION","us-central1")
+    project_id = get_project_id()
+    region = get_region()
     vertexai.init(
-        project=project_id,               # Your project ID.
-        location=region,                # Your cloud region.
+        project=project_id,  # Your project ID.
+        location=region,  # Your cloud region.
         staging_bucket=gcs_bucket,  # Your staging bucket.
     )
+
+
+def get_kms_key():
+    return os.getenv(
+        "CRYPTO_KEY",
+        f"projects/{get_kms_project()}/locations/{get_region()}/keyRings/{get_project_id()}/cryptoKeys/multiProductKey",
+    )
+
+
+def get_wheels():
+    import glob
+
+    return glob.glob("./wheels/*.whl")
+
 
 root_agent = hacky_agent()
 
@@ -119,7 +145,9 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--test", action="store_true")
     parser.add_argument("-d", "--deploy", action="store_true")
     parser.add_argument("-d2", "--deploy2", action="store_true")
-    parser.add_argument("remote")
+    parser.add_argument("-d3", "--deploy3", action="store_true")
+    parser.add_argument("-d4", "--deploy4", action="store_true")
+    parser.add_argument("remote", nargs="?")
     args = parser.parse_args()
 
     if args.test:
@@ -154,6 +182,7 @@ env for agent space. o psci, nocmek, no custom sa, pypi accesible
             description=description,
         )
         print(remote_app)
+
     if args.deploy2:
         init_vertex()
         requirements = [
@@ -162,8 +191,8 @@ env for agent space. o psci, nocmek, no custom sa, pypi accesible
         ]
         extra_packages = ["installation_scripts/install.sh"]
         build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
-        gcs_dir_name = "one"
-        display_name = "Hacky agent no psci, nocmek, no custom sa, pypi accesible"
+        gcs_dir_name = "two"
+        display_name = "Hacky agent no psci, has cmek, no custom sa, pypi accesible"
         description = """A version of hacky agent to allow exploration of runtime 
 env for agent space. o psci, nocmek, no custom sa, pypi accesible
         """
@@ -175,8 +204,77 @@ env for agent space. o psci, nocmek, no custom sa, pypi accesible
             gcs_dir_name=gcs_dir_name,
             display_name=display_name,
             description=description,
+            encryption_spec={"kms_key_name": get_kms_key()},
         )
         print(remote_app)
+
+    if args.deploy3:
+        init_vertex()
+        requirements = get_wheels()
+        extra_packages = ["installation_scripts/install.sh"]
+        extra_packages.extend(requirements)
+        build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
+        gcs_dir_name = "three"
+        display_name = "Hacky agent no psci, no cmek, no custom sa, pypi wheels only"
+        description = """A version of hacky agent to allow exploration of runtime 
+env for agent space. o psci, nocmek, no custom sa, pypi wheels only
+        """
+        remote_app = agent_engines.create(
+            app,
+            requirements=requirements,
+            extra_packages=extra_packages,
+            build_options=build_options,
+            gcs_dir_name=gcs_dir_name,
+            display_name=display_name,
+            description=description,
+        )
+        print(remote_app)
+
+    if args.deploy4:
+        init_vertex()
+        requirements = get_wheels()
+        extra_packages = ["installation_scripts/install.sh"]
+        extra_packages.extend(requirements)
+        build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
+        gcs_dir_name = "four"
+        display_name = "Hacky agent no psci, no cmek, ustom sa, pypi wheels only"
+        description = """A version of hacky agent to allow exploration of runtime 
+env for agent space. no psci, nocmek, custom sa, , pypi wheels only
+        """
+        """
+            custom sa need
+            needs logging/logWrite and monitoring/metricWriter 
+            plus a custom role with
+            aiplatform.endpoints.predict
+            aiplatform.memories.create
+            aiplatform.memories.delete
+            aiplatform.memories.generate
+            aiplatform.memories.get
+            aiplatform.memories.list
+            aiplatform.memories.retrieve
+            aiplatform.memories.update
+            aiplatform.sessionEvents.append
+            aiplatform.sessionEvents.list
+            aiplatform.sessions.create
+            aiplatform.sessions.delete
+            aiplatform.sessions.get
+            aiplatform.sessions.list
+            aiplatform.sessions.run
+            aiplatform.sessions.update
+            serviceusage.services.use
+        """
+        remote_app = agent_engines.create(
+            app,
+            requirements=requirements,
+            extra_packages=extra_packages,
+            build_options=build_options,
+            gcs_dir_name=gcs_dir_name,
+            display_name=display_name,
+            description=description,
+            service_account="reasoning-engine-sa1@methodical-bee-162815.iam.gserviceaccount.com",
+        )
+        print(remote_app)
+
     if args.remote:
         remote_app = agent_engines.get(args.remote)
         for event in remote_app.stream_query(
@@ -189,4 +287,3 @@ env for agent space. o psci, nocmek, no custom sa, pypi accesible
             message="execute bash script id",
         ):
             print(event)
-

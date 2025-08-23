@@ -11,7 +11,7 @@
             "program": "agent.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/hacky",
-            "args": ["-t"]
+            "args": ["-d3"]
         }
     ]
 }
