@@ -73,6 +73,15 @@ def execute_bash_command(command: str) -> str:
     except Exception as e:
         return f"Error executing command: {e}"
 
+def perform_dns_lookup(hostname: str) -> str:
+    """Performs a DNS lookup and returns the IP address."""
+    import socket
+    try:
+        ip_address = socket.gethostbyname(hostname)
+        return ip_address
+    except socket.gaierror:
+        return "DNS lookup failed"
+
 
 def hacky_agent() -> Agent:
     return Agent(
@@ -89,6 +98,7 @@ def hacky_agent() -> Agent:
             get_env_vars,
             get_shells,
             execute_bash_command,
+            perform_dns_lookup
         ],
     )
 
@@ -147,6 +157,7 @@ if __name__ == "__main__":
     parser.add_argument("-d2", "--deploy2", action="store_true")
     parser.add_argument("-d3", "--deploy3", action="store_true")
     parser.add_argument("-d4", "--deploy4", action="store_true")
+    parser.add_argument("-d5", "--deploy5", action="store_true")
     parser.add_argument("remote", nargs="?")
     args = parser.parse_args()
 
@@ -237,7 +248,7 @@ env for agent space. o psci, nocmek, no custom sa, pypi wheels only
         extra_packages.extend(requirements)
         build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
         gcs_dir_name = "four"
-        display_name = "Hacky agent no psci, no cmek, ustom sa, pypi wheels only"
+        display_name = "Hacky agent no psci, no cmek, custom sa, pypi wheels only"
         description = """A version of hacky agent to allow exploration of runtime 
 env for agent space. no psci, nocmek, custom sa, , pypi wheels only
         """
@@ -275,6 +286,54 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
         )
         print(remote_app)
 
+    if args.deploy5:
+        init_vertex()
+        requirements = get_wheels()
+        extra_packages = ["installation_scripts/install.sh"]
+        extra_packages.extend(requirements)
+        build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
+        gcs_dir_name = "five"
+        display_name = "Hacky agent psci, no cmek, custom sa, pypi wheels only"
+        description = """A version of hacky agent to allow exploration of runtime 
+env for agent space. no psci, nocmek, custom sa, , pypi wheels only
+        """
+        """
+            custom sa need
+            needs logging/logWrite and monitoring/metricWriter 
+            plus a custom role with
+            aiplatform.endpoints.predict
+            aiplatform.memories.create
+            aiplatform.memories.delete
+            aiplatform.memories.generate
+            aiplatform.memories.get
+            aiplatform.memories.list
+            aiplatform.memories.retrieve
+            aiplatform.memories.update
+            aiplatform.sessionEvents.append
+            aiplatform.sessionEvents.list
+            aiplatform.sessions.create
+            aiplatform.sessions.delete
+            aiplatform.sessions.get
+            aiplatform.sessions.list
+            aiplatform.sessions.run
+            aiplatform.sessions.update
+            serviceusage.services.use
+        """
+        remote_app = agent_engines.create(
+            app,
+            requirements=requirements,
+            extra_packages=extra_packages,
+            build_options=build_options,
+            gcs_dir_name=gcs_dir_name,
+            display_name=display_name,
+            description=description,
+            service_account="reasoning-engine-sa1@methodical-bee-162815.iam.gserviceaccount.com",
+            psc_interface_config={
+                "network_attachment": "projects/methodical-bee-162815/regions/us-central1/networkAttachments/default-agent-engine",
+            },
+        )
+        print(remote_app)
+
     if args.remote:
         remote_app = agent_engines.get(args.remote)
         for event in remote_app.stream_query(
@@ -285,5 +344,10 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
         for event in remote_app.stream_query(
             user_id="u_123",
             message="execute bash script id",
+        ):
+            print(event)
+        for event in remote_app.stream_query(
+            user_id="u_123",
+            message="perform dns lookup for www.googleapis.com, www.bbc.co.uk and wwww.google.com",
         ):
             print(event)
