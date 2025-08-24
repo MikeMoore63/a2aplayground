@@ -86,6 +86,24 @@ def perform_dns_lookup(hostname: str) -> str:
         return "DNS lookup failed"
 
 
+def attempt_tcp_socket_connection(hostname:str, port:int) -> bool:
+    """Attempts a TCP socket connection and returns the result.
+    This is useful for debugging or checking for network connectivity.
+
+    Returns:
+        bool: True if the connection was successful, False otherwise.
+    """
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            s.connect((hostname, port))
+            return True
+    except:
+        return False
+
+
 def hacky_agent() -> Agent:
     return Agent(
         name="hack_agent",
@@ -102,6 +120,7 @@ def hacky_agent() -> Agent:
             get_shells,
             execute_bash_command,
             perform_dns_lookup,
+            attempt_tcp_socket_connection
         ],
     )
 
