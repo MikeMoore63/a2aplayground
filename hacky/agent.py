@@ -1,9 +1,10 @@
-from google.adk.agents import Agent
+import os
 import argparse
+import vertexai
+
+from google.adk.agents import Agent
 from vertexai.preview import reasoning_engines
 from vertexai import agent_engines
-import vertexai
-import os
 
 
 def get_python_version() -> str:
@@ -73,9 +74,11 @@ def execute_bash_command(command: str) -> str:
     except Exception as e:
         return f"Error executing command: {e}"
 
+
 def perform_dns_lookup(hostname: str) -> str:
     """Performs a DNS lookup and returns the IP address."""
     import socket
+
     try:
         ip_address = socket.gethostbyname(hostname)
         return ip_address
@@ -98,7 +101,7 @@ def hacky_agent() -> Agent:
             get_env_vars,
             get_shells,
             execute_bash_command,
-            perform_dns_lookup
+            perform_dns_lookup,
         ],
     )
 
