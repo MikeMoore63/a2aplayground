@@ -3,6 +3,11 @@ import argparse
 import vertexai
 
 from google.adk.agents import Agent
+from google.adk.agents import SequentialAgent, ParallelAgent, LlmAgent
+from google.adk.tools.tool_context import ToolContext
+from google.adk.tools.base_tool import BaseTool
+from google.adk.tools import google_search
+from typing import Optional, Dict, Any
 from vertexai.preview import reasoning_engines
 from vertexai import agent_engines
 
@@ -86,7 +91,7 @@ def perform_dns_lookup(hostname: str) -> str:
         return "DNS lookup failed"
 
 
-def attempt_tcp_socket_connection(hostname:str, port:int) -> bool:
+def attempt_tcp_socket_connection(hostname: str, port: int) -> bool:
     """Attempts a TCP socket connection and returns the result.
     This is useful for debugging or checking for network connectivity.
 
@@ -104,13 +109,52 @@ def attempt_tcp_socket_connection(hostname:str, port:int) -> bool:
         return False
 
 
+# --- Define your callback function ---
+def simple_before_tool_modifier(
+    tool: BaseTool, args: Dict[str, Any], tool_context: ToolContext
+) -> Optional[Dict]:
+    """Inspects/modifies tool args or skips the tool call."""
+    agent_name = tool_context.agent_name
+    tool_name = tool.name
+    print(f"context state: {tool_context.state}")
+    print(f"[Callback] Before tool call for tool '{tool_name}' in agent '{agent_name}'")
+    print(f"[Callback] Original args: {args}")
+
+    if (
+        tool_name == "perform_dns_lookup"
+        and args.get("hostname", "").lower() == "example.com"
+    ):
+        print("[Callback] Detected 'example.com'. Modifying args to 'google.com'.")
+        args["hostname"] = "google.com"
+        print(f"[Callback] Modified args: {args}")
+        return None
+
+    # If the tool is 'get_capital_city' and country is 'BLOCK'
+    if (
+        tool_name == "perform_dns_lookup"
+        and args.get("hostname", "").upper() == "BLOCK"
+    ):
+        print("[Callback] Detected 'BLOCK'. Skipping tool execution.")
+        return {"result": "Tool execution was blocked by before_tool_callback."}
+
+    print("[Callback] Proceeding with original or previously modified args.")
+    return None
+
+
 def hacky_agent() -> Agent:
-    return Agent(
+    google_search_agent = Agent(
+        name="analyse_agent",
+        model="gemini-2.5-flash",
+        instruction="Answer questions using Google Search when needed. Always cite sources.",
+        description="Professional search assistant with Google Search capabilities",
+        tools=[google_search],
+    )
+    hack_agent = Agent(
         name="hack_agent",
         model="gemini-2.0-flash",
         description=("Agent to answer questions about the running environment"),
         instruction=(
-            "You are a helpful agent who can answer user questions about the runtime environment of agent. Demonstrates what a malicous agent could do by answering questions about the environment, such as the Python version, installed packages, OS version, environment variables, available shells, and executing bash commands."
+            "You are a helpful agent who can answer user questions about the runtime environment of agent and modify that environment."
         ),
         tools=[
             get_python_version,
@@ -120,8 +164,17 @@ def hacky_agent() -> Agent:
             get_shells,
             execute_bash_command,
             perform_dns_lookup,
-            attempt_tcp_socket_connection
+            attempt_tcp_socket_connection,
         ],
+        before_tool_callback=simple_before_tool_modifier,
+    )
+    return SequentialAgent(
+        name="HackerCoordinator",
+        # model="gemini-2.0-flash",
+        # instruction="Route user requests: Use Google search to suggest solutions, Use hack agent to implement suggested solutions.",
+        # description="Main hacky router.",
+        # allow_transfer=True is often implicit with sub_agents in AutoFlow
+        sub_agents=[google_search_agent, hack_agent],
     )
 
 
@@ -168,6 +221,11 @@ app = reasoning_engines.AdkApp(
     enable_tracing=True,
 )
 
+app2a = reasoning_engines.AdkApp(
+    agent=root_agent,
+    enable_tracing=False,
+)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="agent_app.py",
@@ -177,9 +235,11 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--test", action="store_true")
     parser.add_argument("-d", "--deploy", action="store_true")
     parser.add_argument("-d2", "--deploy2", action="store_true")
+    parser.add_argument("-d2a", "--deploy2a", action="store_true")
     parser.add_argument("-d3", "--deploy3", action="store_true")
     parser.add_argument("-d4", "--deploy4", action="store_true")
     parser.add_argument("-d5", "--deploy5", action="store_true")
+    parser.add_argument("-d5a", "--deploy5a", action="store_true")
     parser.add_argument("remote", nargs="?")
     args = parser.parse_args()
 
@@ -231,6 +291,31 @@ env for agent space. o psci, nocmek, no custom sa, pypi accesible
         """
         remote_app = agent_engines.create(
             app,
+            requirements=requirements,
+            extra_packages=extra_packages,
+            build_options=build_options,
+            gcs_dir_name=gcs_dir_name,
+            display_name=display_name,
+            description=description,
+            encryption_spec={"kms_key_name": get_kms_key()},
+        )
+        print(remote_app)
+
+    if args.deploy2a:
+        init_vertex()
+        requirements = [
+            "google-cloud-aiplatform[agent_engines,adk]",
+            # any other dependencies
+        ]
+        extra_packages = ["installation_scripts/install.sh"]
+        build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
+        gcs_dir_name = "twoa"
+        display_name = "Hacky agent no psci, has cmek, no custom sa, pypi accesible"
+        description = """A version of hacky agent to allow exploration of runtime 
+env for agent space. o psci, nocmek, no custom sa, pypi accesible
+        """
+        remote_app = agent_engines.create(
+            app2a,
             requirements=requirements,
             extra_packages=extra_packages,
             build_options=build_options,
@@ -350,6 +435,32 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
             display_name=display_name,
             description=description,
             service_account="reasoning-engine-sa1@methodical-bee-162815.iam.gserviceaccount.com",
+            psc_interface_config={
+                "network_attachment": "projects/methodical-bee-162815/regions/us-central1/networkAttachments/default-agent-engine",
+            },
+        )
+        print(remote_app)
+    if args.deploy5a:
+        init_vertex()
+        requirements = [
+            "google-cloud-aiplatform[agent_engines,adk]",
+            # any other dependencies
+        ]
+        extra_packages = ["installation_scripts/install.sh"]
+        build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
+        gcs_dir_name = "fivea"
+        display_name = "Hacky agent psci, nocmek, no custom sa, pypi accesible"
+        description = """A version of hacky agent to allow exploration of runtime 
+env for agent space. psci, nocmek, no custom sa, pypi accesible
+        """
+        remote_app = agent_engines.create(
+            app,
+            requirements=requirements,
+            extra_packages=extra_packages,
+            build_options=build_options,
+            gcs_dir_name=gcs_dir_name,
+            display_name=display_name,
+            description=description,
             psc_interface_config={
                 "network_attachment": "projects/methodical-bee-162815/regions/us-central1/networkAttachments/default-agent-engine",
             },
