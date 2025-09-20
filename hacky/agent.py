@@ -213,6 +213,10 @@ def get_wheels():
 
     return glob.glob("./wheels/*.whl")
 
+def get_whl_as_requirements():
+    raw_wheels = get_wheels()
+    return [f"{os.path.basename(whl)}" for whl in raw_wheels]
+
 
 root_agent = hacky_agent()
 
@@ -328,9 +332,9 @@ env for agent space. o psci, nocmek, no custom sa, pypi accesible
 
     if args.deploy3:
         init_vertex()
-        requirements = get_wheels()
+        requirements = get_whl_as_requirements()
         extra_packages = ["installation_scripts/install.sh"]
-        extra_packages.extend(requirements)
+        extra_packages.extend(get_wheels())
         build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
         gcs_dir_name = "three"
         display_name = "Hacky agent no psci, no cmek, no custom sa, pypi wheels only"
@@ -350,9 +354,9 @@ env for agent space. o psci, nocmek, no custom sa, pypi wheels only
 
     if args.deploy4:
         init_vertex()
-        requirements = get_wheels()
+        requirements = get_whl_as_requirements()
         extra_packages = ["installation_scripts/install.sh"]
-        extra_packages.extend(requirements)
+        extra_packages.extend(get_wheels())
         build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
         gcs_dir_name = "four"
         display_name = "Hacky agent no psci, no cmek, custom sa, pypi wheels only"
@@ -395,9 +399,9 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
 
     if args.deploy5:
         init_vertex()
-        requirements = get_wheels()
+        requirements = get_whl_as_requirements()
         extra_packages = ["installation_scripts/install.sh"]
-        extra_packages.extend(requirements)
+        extra_packages.extend(get_wheels())
         build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
         gcs_dir_name = "five"
         display_name = "Hacky agent psci, no cmek, custom sa, pypi wheels only"
@@ -426,6 +430,11 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
             aiplatform.sessions.update
             serviceusage.services.use
         """
+        requirements = [
+            "google-cloud-aiplatform[agent_engines,adk]",
+            # any other dependencies
+            # "cloudpickle==3.0.0"
+        ]
         remote_app = agent_engines.create(
             app,
             requirements=requirements,
@@ -438,6 +447,7 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
             psc_interface_config={
                 "network_attachment": "projects/methodical-bee-162815/regions/us-central1/networkAttachments/default-agent-engine",
             },
+            encryption_spec={"kms_key_name": get_kms_key()},
         )
         print(remote_app)
     if args.deploy5a:
@@ -445,6 +455,7 @@ env for agent space. no psci, nocmek, custom sa, , pypi wheels only
         requirements = [
             "google-cloud-aiplatform[agent_engines,adk]",
             # any other dependencies
+            # "cloudpickle==3.0.0"
         ]
         extra_packages = ["installation_scripts/install.sh"]
         build_options = {"installation_scripts": ["installation_scripts/install.sh"]}
@@ -464,6 +475,7 @@ env for agent space. psci, nocmek, no custom sa, pypi accesible
             psc_interface_config={
                 "network_attachment": "projects/methodical-bee-162815/regions/us-central1/networkAttachments/default-agent-engine",
             },
+            encryption_spec={"kms_key_name": get_kms_key()},
         )
         print(remote_app)
 
@@ -482,5 +494,10 @@ env for agent space. psci, nocmek, no custom sa, pypi accesible
         for event in remote_app.stream_query(
             user_id="u_123",
             message="perform dns lookup for www.googleapis.com, www.bbc.co.uk and wwww.google.com",
+        ):
+            print(event)
+        for event in remote_app.stream_query(
+            user_id="u_123",
+            message="can you see if you can open a socket to port 443 on www.bbc.co.uk and wwww.google.com",
         ):
             print(event)
